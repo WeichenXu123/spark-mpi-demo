@@ -2,3 +2,5 @@
 /spark-test.iml
 /.idea
 /out
+*.iml
+

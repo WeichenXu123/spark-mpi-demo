@@ -109,13 +109,14 @@ def cnn_model_fn(features, labels, mode):
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
-def main(unused_argv):
+def main(argv):
+
+    # read args from command `mpirun ... python hvd_run_mnist_training.py inputFile1 inputFile2`
+    featureArrayFile = argv[1]
+    labelsFile = argv[2]
+
     # Horovod: initialize Horovod.
     hvd.init()
-
-    # later I will change this to be passed from main args.
-    featureArrayFile = "/tmp/featureArrayFile"
-    labelsFile = "/tmp/labelsFile"
 
     # Load training and eval data
     train_data = np.loadtxt(featureArrayFile, delimiter=",", dtype=np.int32)
