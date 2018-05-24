@@ -11,26 +11,6 @@ from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, DoubleType, StringType
 from pyspark.taskcontext import TaskContext
 
-
-
-def launchHorovodMPI(featureArrayFile, labelsFile):
-    # later I will pass the two filepath args to the mpi cmd
-    partitionId = TaskContext.get().partitionId()
-    if partitionId == 0:
-        # NOTE: MPI require every node process run in the same working directory,
-        # so I add `cd /tmp/` so every process will run in `/tmp`
-        # without this, the default directory may not exist on other nodes and cause error.
-        mpiCmd = "cd /tmp/;mpirun -np 4 -H localhost:4 -bind-to none -map-by slot python hvd_run_mnist_training"
-        prc = Popen(mpiCmd, stdout=PIPE, stderr=PIPE, shell=True)
-        stdout, stderr = prc.communicate()
-        if prc.returncode != 0:
-            raise Exception, "cmd:\n" + mpiCmd + "\ncmd ouput:\n" + stdout + "\ncmd err\n: " + stderr
-        # I still read data from stdout,
-        # later I will change to read from local file
-        # but we need to address the issue that ensure mapping process-0 to the mpirun node.
-        return stdout
-
-
 def runHorovodMPI(iter):
     taskCtx = TaskContext.get()
     # assume only one element in the iterator.
@@ -107,12 +87,11 @@ if __name__ == "__main__":
         return vec.toArray().tolist()
 
     result = trainingDF.select(vec2arr(trainingDF.features).alias('featuresData'), trainingDF.label) \
+        .repartition(3) \
         .toPandasRdd() \
+        .barrier() \
         .mapPartitions(runHorovodMPI) \
         .collect()
-
-    #mpi_udf = udf(launchHorovodMPI, StringType())
-    #result = trainingDF.select(mpi_udf(trainingDF["featureArrayFile"], trainingDF["labelsFile"])).collect()
 
     print(result)
     spark.stop()
