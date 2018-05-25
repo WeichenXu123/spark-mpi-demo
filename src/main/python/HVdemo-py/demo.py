@@ -32,6 +32,7 @@ def runHorovodMPI(iter):
     # assume only one element in the iterator.
     # so I fix the file name for now
     dataFilePath = "/tmp/mpiInputData"
+    outputFilePath = "/tmp/mpiOutputResult"
     for pdf in iter:
         table = pa.Table.from_pandas(pdf)
         # later will directly get pyarrow table from RDD.
@@ -63,27 +64,25 @@ def runHorovodMPI(iter):
 
         mpiProgPath = "/tmp/hvd_run_mnist_training.py"
         # NOTE: specify mpi working dir "/tmp".
-        # We need to generate a random working dir for MPI program.
-        # and note the horovod estimator will generate checkpoint dir `mnist_convnet_model`
-        # in the working dir, make sure to clean them before running again.
-        mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s" % (
+        # and note the horovod estimator will generate checkpoint dir
+        # `mnist_convnet_model_${RANDOM_NUMBER}`
+        # in the working dir.
+        mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s %s" % (
             "/tmp",
             numProc,
             hostsListParam,
             #rankFilePath,
-            mpiProgPath, dataFilePath
+            mpiProgPath, dataFilePath, outputFilePath
         )
         prc = Popen(mpiCmd, stdout=PIPE, stderr=PIPE, shell=True)
         stdout, stderr = prc.communicate()
         if prc.returncode != 0:
             raise Exception, "cmd:\n" + mpiCmd + "\ncmd ouput:\n" + stdout + "\ncmd err\n: " + stderr
 
-        # FOR DEBUG
-        # I still read data from stdout,
-        # later I will change to read from local file
-
+        with open(outputFilePath, "r") as f:
+            outputContent = f.read()
         taskCtx.barrier()
-        return [stdout]
+        return [outputContent]
     else:
         taskCtx.barrier()
         return []

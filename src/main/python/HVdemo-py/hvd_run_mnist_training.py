@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 import horovod.tensorflow as hvd
 
-#from pyarrow_util import load_pandas_df
+import random
 import pyarrow as pa
 
 learn = tf.contrib.learn
@@ -113,8 +113,6 @@ def cnn_model_fn(features, labels, mode):
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
-# in order for easier deployment, move this function here.
-# do not need another pyarrow_util.py module.
 def load_pandas_df(filePath):
     with pa.OSFile(filePath, 'rb') as f:
         buff = f.read_buffer()
@@ -128,11 +126,11 @@ def load_pyarrow_table(filePath):
         return reader.read_all()
 
 
-
 def main(argv):
 
-    # read args from command `mpirun ... python hvd_run_mnist_training.py inputFilePath`
+    # read args from command `mpirun ... python hvd_run_mnist_training.py inputFilePath outputFilePath`
     inputFilePath = argv[1]
+    outputFilePath = argv[2]
 
     # Horovod: initialize Horovod.
     hvd.init()
@@ -152,7 +150,8 @@ def main(argv):
 
     # Horovod: save checkpoints only on worker 0 to prevent other workers from
     # corrupting them.
-    model_dir = './mnist_convnet_model' if hvd.rank() == 0 else None
+    model_dir = './mnist_convnet_model_' + str(random.randint(0, 2<<30))\
+        if hvd.rank() == 0 else None
 
     # Create the Estimator
     mnist_classifier = tf.estimator.Estimator(
@@ -185,8 +184,13 @@ def main(argv):
         steps=5 // hvd.size(),
         hooks=[logging_hook, bcast_hook])
 
-    # Later will add code to write returned data to local file.
-
+    with open(outputFilePath, "w") as f:
+        varlist = mnist_classifier.get_variable_names()
+        vars = {}
+        for var in varlist:
+            vars[var] = mnist_classifier.get_variable_value(var).tolist()
+        # the result is large (135MB). only store keys to output file for now.
+        f.write(str(varlist))
 
 if __name__ == "__main__":
     tf.app.run()
