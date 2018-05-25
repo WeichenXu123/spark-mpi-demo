@@ -62,11 +62,18 @@ def runHorovodMPI(iter):
             for i in range(0, numProc):
                 rf.write("rank %d=%s slot=0-4" % (i, hostsList[i]))
 
+        # NOTE:
+        # Remember to change to real path
         mpiProgPath = "/tmp/hvd_run_mnist_training.py"
+
         # NOTE: specify mpi working dir "/tmp".
         # and note the horovod estimator will generate checkpoint dir
         # `mnist_convnet_model_${RANDOM_NUMBER}`
         # in the working dir.
+
+        # NOTE:
+        # Remember to add `sudo -u ubuntu` when run on databricks cluster
+        # and change python path
         mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s %s" % (
             "/tmp",
             numProc,
@@ -95,7 +102,13 @@ if __name__ == "__main__":
 
     spark.conf.set("spark.sql.execution.arrow.enabled", "true")
 
+
+    # NOTE:
+    # Remember to change to the worker number
     np = 1
+
+    # NOTE:
+    # Remember to change to the real path
     df = spark.read.parquet("/tmp/mnist_parquet").repartition(np)
 
     @udf(returnType=ArrayType(DoubleType(), False))
@@ -109,6 +122,4 @@ if __name__ == "__main__":
 
     print("result: " + str(result))
     spark.stop()
-
-
 
