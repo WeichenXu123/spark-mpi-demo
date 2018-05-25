@@ -11,7 +11,14 @@ from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, DoubleType, StringType
 from pyspark.taskcontext import TaskContext
 
-from pyarrow_util import save_pandas_df
+import pyarrow as pa
+
+def save_pandas_df(pdf, filePath):
+    context = pa.default_serialization_context()
+    serialized_pdf = context.serialize(pdf)
+    with pa.OSFile(filePath, 'wb') as f:
+        f.write(serialized_pdf.to_buffer())
+
 
 def runHorovodMPI(iter):
     taskCtx = TaskContext.get()
@@ -86,7 +93,7 @@ if __name__ == "__main__":
     result = trainingDF.select(vec2arr(trainingDF.features)
                                .alias('featuresData'),
                                trainingDF.label) \
-        .repartition(2) \
+        .repartition(1) \
         .toPandasRdd() \
         .barrier() \
         .mapPartitions(runHorovodMPI) \
