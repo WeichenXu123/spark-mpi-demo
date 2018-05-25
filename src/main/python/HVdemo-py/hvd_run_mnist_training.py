@@ -119,8 +119,8 @@ def main(argv):
     hvd.init()
 
     # Load training and eval data
-    train_data = np.loadtxt(featureArrayFile, delimiter=",", dtype=np.int32)
-    train_labels = np.loadtxt(labelsFile, delimiter=",", dtype=np.int32)
+    train_data = np.loadtxt(featureArrayFile, delimiter=",", dtype=np.float32)
+    train_labels = np.loadtxt(labelsFile, delimiter=",", dtype=np.float32)
 
     # Horovod: pin GPU to be used to process local rank (one GPU per process)
     config = tf.ConfigProto()
@@ -159,7 +159,7 @@ def main(argv):
     # Horovod: adjust number of steps based on number of GPUs.
     mnist_classifier.train(
         input_fn=train_input_fn,
-        steps=20000 // hvd.size(),
+        steps=5 // hvd.size(),
         hooks=[logging_hook, bcast_hook])
 
     # Later will add code to write returned data to local file.

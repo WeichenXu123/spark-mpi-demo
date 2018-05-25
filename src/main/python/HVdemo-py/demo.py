@@ -17,19 +17,16 @@ def runHorovodMPI(iter):
     # so I fix the file name for now
     featureArrayFilePath = "/tmp/featureArrayFile"
     labelsFilePath = "/tmp/labelsFile"
-
     for pdf in iter:
         featureArray = np.array(pdf.featuresData.values.tolist())
         labels = pdf.label.values
-        np.savetxt(featureArrayFilePath, featureArray, delimiter=",", dtype=np.float32)
-        np.savetxt(labelsFilePath, labels, delimiter=",", dtype=np.float32)
+        np.savetxt(featureArrayFilePath, featureArray, delimiter=",")
+        np.savetxt(labelsFilePath, labels, delimiter=",")
     taskCtx.barrier()
-
     partitionID = taskCtx.partitionId()
-
     if partitionID == 0:
-        hostsList = taskCtx.hosts()
-        localHost = taskCtx.localHost() # need a new API
+        hostsList = [i.split(":")[0] for i in taskCtx.hosts()]
+        localHost = hostsList[0] # need a new API
         numProc = len(hostsList)
 
         # move local host to be first one.
@@ -47,14 +44,15 @@ def runHorovodMPI(iter):
         rankFilePath = "/tmp/rankfile"
         with open(rankFilePath, "w") as rf:
             for i in range(0, numProc):
-                rf.write("rank %d=%s slot=0" % (i, hostsList[i]))
+                rf.write("rank %d=%s slot=0-4" % (i, hostsList[i]))
 
         mpiProgPath = "/tmp/hvd_run_mnist_training.py"
         # NOTE: specify mpi working dir "/tmp".
-        mpiCmd = "mpirun --wdir %s -np 4 -H %s --rankfile %s -bind-to none -map-by slot python %s %s %s" % (
+        mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s %s" % (
             "/tmp",
+            numProc,
             hostsListParam,
-            rankFilePath,
+            #rankFilePath,
             mpiProgPath, featureArrayFilePath, labelsFilePath
         )
         prc = Popen(mpiCmd, stdout=PIPE, stderr=PIPE, shell=True)
@@ -86,8 +84,10 @@ if __name__ == "__main__":
     def vec2arr(vec):
         return vec.toArray().tolist()
 
-    result = trainingDF.select(vec2arr(trainingDF.features).alias('featuresData'), trainingDF.label) \
-        .repartition(3) \
+    result = trainingDF.select(vec2arr(trainingDF.features)
+                               .alias('featuresData'),
+                               trainingDF.label) \
+        .repartition(2) \
         .toPandasRdd() \
         .barrier() \
         .mapPartitions(runHorovodMPI) \
