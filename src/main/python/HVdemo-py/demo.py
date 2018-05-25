@@ -20,13 +20,22 @@ def save_pandas_df(pdf, filePath):
         f.write(serialized_pdf.to_buffer())
 
 
+def save_pyarrow_table(table, filePath):
+    with pa.OSFile(filePath, "wb") as f:
+        writer = pa.RecordBatchFileWriter(f, table.schema)
+        writer.write_table(table)
+        writer.close()
+
+
 def runHorovodMPI(iter):
     taskCtx = TaskContext.get()
     # assume only one element in the iterator.
     # so I fix the file name for now
     dataFilePath = "/tmp/mpiInputData"
     for pdf in iter:
-        save_pandas_df(pdf, dataFilePath)
+        table = pa.Table.from_pandas(pdf)
+        # later will directly get pyarrow table from RDD.
+        save_pyarrow_table(table, dataFilePath)
 
     taskCtx.barrier()
     partitionID = taskCtx.partitionId()
@@ -54,6 +63,9 @@ def runHorovodMPI(iter):
 
         mpiProgPath = "/tmp/hvd_run_mnist_training.py"
         # NOTE: specify mpi working dir "/tmp".
+        # We need to generate a random working dir for MPI program.
+        # and note the horovod estimator will generate checkpoint dir `mnist_convnet_model`
+        # in the working dir, make sure to clean them before running again.
         mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s" % (
             "/tmp",
             numProc,
@@ -99,7 +111,7 @@ if __name__ == "__main__":
         .mapPartitions(runHorovodMPI) \
         .collect()
 
-    print(result)
+    print("result: " + str(result))
     spark.stop()
 
 

@@ -112,13 +112,22 @@ def cnn_model_fn(features, labels, mode):
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
+
 # in order for easier deployment, move this function here.
 # do not need another pyarrow_util.py module.
 def load_pandas_df(filePath):
-    with pa.OSFile(filePath, 'wb') as f:
+    with pa.OSFile(filePath, 'rb') as f:
         buff = f.read_buffer()
     context = pa.default_serialization_context()
     return context.deserialize(buff)
+
+
+def load_pyarrow_table(filePath):
+    with pa.OSFile(filePath, 'rb') as f:
+        reader = pa.RecordBatchFileReader(f)
+        return reader.read_all()
+
+
 
 def main(argv):
 
@@ -129,7 +138,10 @@ def main(argv):
     hvd.init()
 
     # Load training and eval data
-    pdf = load_pandas_df(inputFilePath)
+    table = load_pyarrow_table(inputFilePath)
+
+    # later I will change code to avoid using `to_pandas`
+    pdf = table.to_pandas()
     train_data = np.array(pdf.featuresData.values.tolist())
     train_labels = pdf.label.values
 
