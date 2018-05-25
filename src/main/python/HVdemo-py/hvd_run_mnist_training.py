@@ -5,6 +5,10 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 import horovod.tensorflow as hvd
+
+#from pyarrow_util import load_pandas_df
+import pyarrow as pa
+
 learn = tf.contrib.learn
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -108,19 +112,26 @@ def cnn_model_fn(features, labels, mode):
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
+# in order for easier deployment, move this function here.
+# do not need another pyarrow_util.py module.
+def load_pandas_df(filePath):
+    with pa.OSFile(filePath, 'wb') as f:
+        buff = f.read_buffer()
+    context = pa.default_serialization_context()
+    return context.deserialize(buff)
 
 def main(argv):
 
-    # read args from command `mpirun ... python hvd_run_mnist_training.py inputFile1 inputFile2`
-    featureArrayFile = argv[1]
-    labelsFile = argv[2]
+    # read args from command `mpirun ... python hvd_run_mnist_training.py inputFilePath`
+    inputFilePath = argv[1]
 
     # Horovod: initialize Horovod.
     hvd.init()
 
     # Load training and eval data
-    train_data = np.loadtxt(featureArrayFile, delimiter=",", dtype=np.float32)
-    train_labels = np.loadtxt(labelsFile, delimiter=",", dtype=np.float32)
+    pdf = load_pandas_df(inputFilePath)
+    train_data = np.array(pdf.featuresData.values.tolist())
+    train_labels = pdf.label.values
 
     # Horovod: pin GPU to be used to process local rank (one GPU per process)
     config = tf.ConfigProto()

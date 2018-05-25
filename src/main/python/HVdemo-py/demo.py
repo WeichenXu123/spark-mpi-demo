@@ -11,17 +11,16 @@ from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, DoubleType, StringType
 from pyspark.taskcontext import TaskContext
 
+from pyarrow_util import save_pandas_df
+
 def runHorovodMPI(iter):
     taskCtx = TaskContext.get()
     # assume only one element in the iterator.
     # so I fix the file name for now
-    featureArrayFilePath = "/tmp/featureArrayFile"
-    labelsFilePath = "/tmp/labelsFile"
+    dataFilePath = "/tmp/mpiInputData"
     for pdf in iter:
-        featureArray = np.array(pdf.featuresData.values.tolist())
-        labels = pdf.label.values
-        np.savetxt(featureArrayFilePath, featureArray, delimiter=",")
-        np.savetxt(labelsFilePath, labels, delimiter=",")
+        save_pandas_df(pdf, dataFilePath)
+
     taskCtx.barrier()
     partitionID = taskCtx.partitionId()
     if partitionID == 0:
@@ -48,12 +47,12 @@ def runHorovodMPI(iter):
 
         mpiProgPath = "/tmp/hvd_run_mnist_training.py"
         # NOTE: specify mpi working dir "/tmp".
-        mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s %s" % (
+        mpiCmd = "mpirun --wdir %s -np %d -H %s python %s %s" % (
             "/tmp",
             numProc,
             hostsListParam,
             #rankFilePath,
-            mpiProgPath, featureArrayFilePath, labelsFilePath
+            mpiProgPath, dataFilePath
         )
         prc = Popen(mpiCmd, stdout=PIPE, stderr=PIPE, shell=True)
         stdout, stderr = prc.communicate()
