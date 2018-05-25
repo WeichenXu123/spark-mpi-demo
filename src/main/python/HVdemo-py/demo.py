@@ -93,19 +93,16 @@ if __name__ == "__main__":
         .appName("PY0 demo") \
         .getOrCreate()
 
-    trainingDF = spark.read.format("libsvm") \
-        .option("numFeatures", "784") \
-        .load("/tmp/mnist-training-data.txt")
+    spark.conf.set("spark.sql.execution.arrow.enabled", "true")
+
+    np = 1
+    df = spark.read.parquet("/tmp/mnist_parquet").repartition(np)
 
     @udf(returnType=ArrayType(DoubleType(), False))
     def vec2arr(vec):
         return vec.toArray().tolist()
 
-    result = trainingDF.select(vec2arr(trainingDF.features)
-                               .alias('featuresData'),
-                               trainingDF.label) \
-        .repartition(1) \
-        .toPandasRdd() \
+    result = df.toPandasRdd() \
         .barrier() \
         .mapPartitions(runHorovodMPI) \
         .collect()

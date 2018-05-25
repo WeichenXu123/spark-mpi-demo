@@ -140,8 +140,8 @@ def main(argv):
 
     # later I will change code to avoid using `to_pandas`
     pdf = table.to_pandas()
-    train_data = np.array(pdf.featuresData.values.tolist())
-    train_labels = pdf.label.values
+    train_data = np.reshape(np.array(np.concatenate(pdf['features']), dtype=np.float32), (-1, 784))
+    train_labels = np.array(pdf['label'], dtype=np.float32)
 
     # Horovod: pin GPU to be used to process local rank (one GPU per process)
     config = tf.ConfigProto()
