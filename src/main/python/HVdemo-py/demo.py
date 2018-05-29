@@ -4,6 +4,7 @@ from pyspark.taskcontext import TaskContext
 
 from subprocess import Popen, PIPE
 import random
+import os
 
 from pyspark.ml.wrapper import _jvm
 from pyspark.sql.functions import udf, col
@@ -32,6 +33,11 @@ def runHorovodMPI(iter):
     # so I fix the file name for now
     dataFilePath = "/tmp/mpiInputData"
     modelExportDir = "/tmp/modelExportDir_" + str(random.randint(0, 2<<30))
+
+    # Note:
+    # change this to be a dbfs path
+    destModelDir = "/tmp/model_" + str(random.randint(0, 2<<30))
+
     for pdf in iter:
         table = pa.Table.from_pandas(pdf)
         # later will directly get pyarrow table from RDD.
@@ -85,14 +91,21 @@ def runHorovodMPI(iter):
         if prc.returncode != 0:
             raise Exception, "cmd:\n" + mpiCmd + "\ncmd ouput:\n" + stdout + "\ncmd err\n: " + stderr
 
+        # from tensorflow.contrib import predictor
+        # predictor.from_saved_model(modelExportDir)
+
+        # get the inner dir.
+        modelDir = modelExportDir + os.listdir(modelExportDir)[0]
+
+        copyModelCmd = "cp -r %s %s" % (modelDir, destModelDir)
+        prc = Popen(copyModelCmd, stdout=PIPE, stderr=PIPE, shell=True)
+        stdout, stderr = prc.communicate()
+        if prc.returncode != 0:
+            raise Exception, "cmd:\n" + mpiCmd + "\ncmd ouput:\n" + stdout + "\ncmd err\n: " + stderr
+
         taskCtx.barrier()
 
-        # only return the exported model dir for now.
-        # Do we need to load back it here as a Predictor ?
-        # Or move the model dir into some central storage ?
-        from tensorflow.contrib import predictor
-        predictor.from_saved_model(modelExportDir)
-        return ["The model is at %s : %s" %(localHost, modelExportDir)]
+        return [destModelDir]
     else:
         taskCtx.barrier()
         return []
@@ -113,10 +126,6 @@ if __name__ == "__main__":
     # NOTE:
     # Remember to change to the real path
     df = spark.read.parquet("/tmp/mnist_parquet").repartition(np)
-
-    @udf(returnType=ArrayType(DoubleType(), False))
-    def vec2arr(vec):
-        return vec.toArray().tolist()
 
     result = df.toPandasRdd() \
         .barrier() \

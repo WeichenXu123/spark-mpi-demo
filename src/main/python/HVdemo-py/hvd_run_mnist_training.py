@@ -186,11 +186,23 @@ def main(argv):
         steps=5 // hvd.size(),
         hooks=[logging_hook, bcast_hook])
 
+    """
     feature_x = tf.feature_column.numeric_column("x", [784])
     feature_columns = [feature_x]
     feature_spec = tf.feature_column.make_parse_example_spec(feature_columns)
     serving_input_receiver_fn = tf.estimator.export.build_parsing_serving_input_receiver_fn(feature_spec)
-    mnist_classifier.export_savedmodel(exportModelDir, serving_input_receiver_fn)
+    """
+
+    """
+    def serving_input_receiver_fn():
+        serialized_tf_example = tf.placeholder(dtype=tf.string,
+                                               shape=[None],
+                                               name='input_tensors')
+        receiver_tensors = {'inputs': serialized_tf_example}
+        feature_spec = {'x': tf.FixedLenFeature([784],tf.float32)}
+        features = tf.parse_example(serialized_tf_example, feature_spec)
+        return tf.estimator.export.ServingInputReceiver(features, receiver_tensors)
+    """
 
     """
     with open(outputFilePath, "w") as f:
@@ -201,6 +213,15 @@ def main(argv):
         # the result is large (135MB). only store keys to output file for now.
         f.write(str(varlist))
     """
+
+    def serving_input_receiver_fn():
+        # The outer dimension (None) allows us to batch up inputs for
+        # efficiency. However, it also means that if we want a prediction
+        # for a single instance, we'll need to wrap it in an outer list.
+        inputs = {"x": tf.placeholder(shape=[None, 784], dtype=tf.float32)}
+        return tf.estimator.export.ServingInputReceiver(inputs, inputs)
+    mnist_classifier.export_savedmodel(exportModelDir, serving_input_receiver_fn)
+
 
 if __name__ == "__main__":
     tf.app.run()
