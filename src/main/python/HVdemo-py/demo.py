@@ -90,6 +90,8 @@ def runHorovodMPI(iter):
         # only return the exported model dir for now.
         # Do we need to load back it here as a Predictor ?
         # Or move the model dir into some central storage ?
+        from tensorflow.contrib import predictor
+        predictor.from_saved_model(modelExportDir)
         return ["The model is at %s : %s" %(localHost, modelExportDir)]
     else:
         taskCtx.barrier()
