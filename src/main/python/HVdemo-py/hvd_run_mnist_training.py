@@ -84,7 +84,8 @@ def cnn_model_fn(features, labels, mode):
         "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
     }
     if mode == tf.estimator.ModeKeys.PREDICT:
-        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+        export_outputs = {'predict_output': tf.estimator.export.PredictOutput(predictions)}
+        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions,export_outputs=export_outputs)
 
     # Calculate Loss (for both TRAIN and EVAL modes)
     onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=10)
@@ -130,7 +131,8 @@ def main(argv):
 
     # read args from command `mpirun ... python hvd_run_mnist_training.py inputFilePath outputFilePath`
     inputFilePath = argv[1]
-    outputFilePath = argv[2]
+    #outputFilePath = argv[2]
+    exportModelDir = argv[2]
 
     # Horovod: initialize Horovod.
     hvd.init()
@@ -184,6 +186,13 @@ def main(argv):
         steps=5 // hvd.size(),
         hooks=[logging_hook, bcast_hook])
 
+    feature_x = tf.feature_column.numeric_column("x", [784])
+    feature_columns = [feature_x]
+    feature_spec = tf.feature_column.make_parse_example_spec(feature_columns)
+    serving_input_receiver_fn = tf.estimator.export.build_parsing_serving_input_receiver_fn(feature_spec)
+    mnist_classifier.export_savedmodel(exportModelDir, serving_input_receiver_fn)
+
+    """
     with open(outputFilePath, "w") as f:
         varlist = mnist_classifier.get_variable_names()
         vars = {}
@@ -191,6 +200,7 @@ def main(argv):
             vars[var] = mnist_classifier.get_variable_value(var).tolist()
         # the result is large (135MB). only store keys to output file for now.
         f.write(str(varlist))
+    """
 
 if __name__ == "__main__":
     tf.app.run()

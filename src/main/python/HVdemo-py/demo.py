@@ -1,10 +1,9 @@
 from pyspark.sql import SparkSession
 from pyspark.taskcontext import TaskContext
 
-import os
+
 from subprocess import Popen, PIPE
-import numpy as np
-import time
+import random
 
 from pyspark.ml.wrapper import _jvm
 from pyspark.sql.functions import udf, col
@@ -32,7 +31,7 @@ def runHorovodMPI(iter):
     # assume only one element in the iterator.
     # so I fix the file name for now
     dataFilePath = "/tmp/mpiInputData"
-    outputFilePath = "/tmp/mpiOutputResult"
+    modelExportDir = "/tmp/modelExportDir_" + str(random.randint(0, 2<<30))
     for pdf in iter:
         table = pa.Table.from_pandas(pdf)
         # later will directly get pyarrow table from RDD.
@@ -79,17 +78,19 @@ def runHorovodMPI(iter):
             numProc,
             hostsListParam,
             #rankFilePath,
-            mpiProgPath, dataFilePath, outputFilePath
+            mpiProgPath, dataFilePath, modelExportDir
         )
         prc = Popen(mpiCmd, stdout=PIPE, stderr=PIPE, shell=True)
         stdout, stderr = prc.communicate()
         if prc.returncode != 0:
             raise Exception, "cmd:\n" + mpiCmd + "\ncmd ouput:\n" + stdout + "\ncmd err\n: " + stderr
 
-        with open(outputFilePath, "r") as f:
-            outputContent = f.read()
         taskCtx.barrier()
-        return [outputContent]
+
+        # only return the exported model dir for now.
+        # Do we need to load back it here as a Predictor ?
+        # Or move the model dir into some central storage ?
+        return ["The model is at %s : %s" %(localHost, modelExportDir)]
     else:
         taskCtx.barrier()
         return []
