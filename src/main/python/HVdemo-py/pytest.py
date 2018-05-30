@@ -2,6 +2,7 @@ import pyarrow as pa
 import numpy as np
 import pandas as pd
 import time
+from timeit import timeit
 
 """
 def genArrowTable(numRows, numDim, filePath):
@@ -17,6 +18,7 @@ def genArrowTable(numRows, numDim, filePath):
         writer.close()
 """
 
+
 if __name__ == "__main__":
 
     """
@@ -26,6 +28,8 @@ if __name__ == "__main__":
     numRows: 10000, to_pandas time 0.005849 s, from_pandas time 0.139782 s
     numRows: 100000, to_pandas time 0.039982 s, from_pandas time 1.946107 s
     """
+
+    numTries = 100
     for numRows in [100, 1000, 10000, 100000]:
         numDim = 784
         data = {
@@ -34,12 +38,16 @@ if __name__ == "__main__":
         }
         pdf = pd.DataFrame(data, columns=['features', 'label'])
         table = pa.Table.from_pandas(pdf)
-        time1 = time.time()
         pdf2 = table.to_pandas()
-        time2 = time.time()
-        table2 = pa.Table.from_pandas(pdf2)
-        time3 = time.time()
+        t1 = timeit('table.to_pandas()',
+                    setup='from __main__ import table', number = numTries)
+        #table2 = pa.Table.from_pandas(pdf2)
+
+        paa = pa
+        t2 = timeit('paa.Table.from_pandas(pdf2)',
+                    setup='from __main__ import pdf2, paa', number = numTries)
         print("numRows: %d, to_pandas time %f s, from_pandas time %f s" % (
-            numRows, time2 - time1, time3 - time2
+            numRows, t1/numTries, t2/numTries
         ))
+
 
